@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · MediTrace</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <style>
+    .login-wrap { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
+    .login-art { background: radial-gradient(1200px 600px at 10% 10%, rgba(16,185,129,.35), transparent 60%),
+                 radial-gradient(900px 500px at 90% 90%, rgba(14,165,233,.35), transparent 60%), #0b1220;
+                 color: #e2e8f0; padding: 56px; display: flex; flex-direction: column; }
+    .login-art h1 { font-size: 40px; font-weight: 800; letter-spacing: -1.2px; line-height: 1.1; color: #fff; }
+    .login-art h1 span { background: linear-gradient(90deg, #34d399, #38bdf8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .feat { display: flex; gap: 14px; margin-top: 20px; }
+    .feat i { font-size: 20px; color: #34d399; width: 40px; height: 40px; border-radius: 11px; background: rgba(255,255,255,.06); display: grid; place-items: center; flex-shrink: 0; }
+    .feat b { color: #fff; display: block; }
+    .feat span { font-size: 13px; color: #94a3b8; }
+    .art-stats { margin-top: auto; display: flex; gap: 28px; }
+    .art-stats b { font-size: 28px; color: #fff; display: block; letter-spacing: -.5px; }
+    .art-stats span { font-size: 12px; color: #94a3b8; }
+    .login-form { display: grid; place-items: center; padding: 40px; }
+    .login-card { width: 100%; max-width: 400px; }
+    .demo { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; margin-bottom: 8px; background: var(--surface); }
+    .demo:hover { border-color: var(--accent); background: var(--accent-soft); }
+    @media (max-width: 900px) { .login-wrap { grid-template-columns: 1fr; } .login-art { display: none; } }
+  </style>
+</head>
+<body>
+<div class="login-wrap">
+  <section class="login-art">
+    <div class="d-flex align-items-center gap-2">
+      <div class="brand-logo"><i class="bi bi-shield-check"></i></div>
+      <div class="brand-name">Medi<span>Trace</span></div>
+    </div>
+    <h1 class="mt-5">Stop fake medicines<br><span>at the pharmacy counter.</span></h1>
+    <p class="mt-3" style="max-width:480px;color:#94a3b8">Every strip carries a unique serial. Every scan is verified inside MySQL by a trigger that catches unregistered codes, resold codes, impossible travel between cities, recalled batches and expired stock.</p>
+    <div class="feat"><i class="bi bi-geo-alt"></i><div><b>Impossible-travel detection</b><span>Haversine distance and speed between scans, computed in SQL</span></div></div>
+    <div class="feat"><i class="bi bi-lock"></i><div><b>Tamper-proof evidence</b><span>Scan records are append-only; every status change is audited</span></div></div>
+    <div class="feat"><i class="bi bi-people"></i><div><b>Patients, pharmacies, regulators</b><span>One database, role-based views, public verification portal</span></div></div>
+    <div class="art-stats">
+      <div><b>{{ stats.total_scans }}</b><span>scans verified</span></div>
+      <div><b>{{ (stats.counterfeit or 0) + (stats.cloned or 0) + (stats.suspicious or 0) }}</b><span>fakes caught</span></div>
+      <div><b>{{ (stats.recalled or 0) + (stats.expired or 0) }}</b><span>unsafe strips blocked</span></div>
+    </div>
+  </section>
+
+  <section class="login-form">
+    <div class="login-card">
+      <h2 class="fw-bold" style="letter-spacing:-.6px">Sign in</h2>
+      <p class="muted">Use one of the demo accounts below, or type your own.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="alert alert-{{ cat }} flash py-2">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      <form method="post">
+        <div class="mb-3"><label class="form-label">Username</label>
+          <input id="u" name="username" class="form-control form-control-lg" required autofocus></div>
+        <div class="mb-3"><label class="form-label">Password</label>
+          <input id="p" name="password" type="password" class="form-control form-control-lg" required></div>
+        <button class="btn btn-accent btn-lg w-100">Sign in <i class="bi bi-arrow-right ms-1"></i></button>
+      </form>
+      <div class="small-note mt-4 mb-2 fw-semibold text-uppercase" style="letter-spacing:1px">Demo accounts (click to fill)</div>
+      {% for u, p, name, role, desc in [('admin','admin123','Drug Control Officer','REGULATOR','Everything: dashboard, alerts, complaints, Query Lab'),
+                                        ('chennai','pharma123','Care Plus Pharmacy','PHARMACIST','Scan strips at the Chennai counter'),
+                                        ('medilife','mfg123','Medilife Pharma Ltd','MANUFACTURER','Register, recall and label batches')] %}
+        <div class="demo" onclick="document.getElementById('u').value='{{ u }}';document.getElementById('p').value='{{ p }}';">
+          <div class="avatar" style="background:{{ {'REGULATOR':'linear-gradient(135deg,#0ea5e9,#6366f1)','PHARMACIST':'linear-gradient(135deg,#10b981,#0ea5e9)','MANUFACTURER':'linear-gradient(135deg,#8b5cf6,#d946ef)'}[role] }}">{{ u[0]|upper }}</div>
+          <div class="flex-grow-1"><div class="fw-semibold">{{ name }} <span class="role-badge role-{{ role }} ms-1">{{ role }}</span></div>
+            <div class="small-note">{{ desc }}</div></div>
+          <code class="small-note">{{ u }}</code>
+        </div>
+      {% endfor %}
+      <a href="{{ url_for('verify') }}" class="btn btn-soft w-100 mt-3"><i class="bi bi-patch-check me-1"></i> I'm a patient: verify my medicine</a>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Complaints{% endblock %}
+{% block page_title %}Patient complaints{% endblock %}
+{% block page_sub %}Priority is set by trigger trg_complaint_priority; the workflow is enforced by trg_complaint_workflow{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-3 small-note flex-wrap">
+  <span><i class="bi bi-diagram-3 me-1"></i>OPEN → INVESTIGATING → RESOLVED / REJECTED</span>
+  <span>· closed complaints can never be reopened · closing needs a note</span>
+  <span class="ms-auto">{{ total }} complaints</span>
+</div>
+<div class="row g-3">
+  {% for status, icon, col in [('OPEN','bi-inbox','#ef4444'),('INVESTIGATING','bi-search','#f97316'),('RESOLVED','bi-check2-circle','#10b981'),('REJECTED','bi-x-circle','#64748b')] %}
+  <div class="col-xl-3 col-md-6">
+    <div class="kan-col">
+      <h4><i class="bi {{ icon }}" style="color:{{ col }}"></i>{{ status }}<span class="ms-auto badge rounded-pill" style="background:{{ col }}">{{ cols[status]|length }}</span></h4>
+      {% for c in cols[status] %}
+        <div class="kan-card">
+          <div class="d-flex align-items-center gap-2 mb-2"><span class="vb pr-{{ c.priority }}">{{ c.priority }}</span>
+            <span class="small-note">#{{ c.complaint_id }}</span><span class="ms-auto small-note">{{ c.created_at|dt }}</span></div>
+          <a class="mono small" href="{{ url_for('trace', serial=c.serial_no) }}">{{ c.serial_no }}</a>
+          <span class="small-note ms-1">{{ c.serial_state|replace('_',' ') }}</span>
+          <p class="small my-2">{{ c.description }}</p>
+          <div class="small-note"><i class="bi bi-person me-1"></i>{{ c.reporter_name }} · {{ c.city }}{% if c.reporter_phone %} · {{ c.reporter_phone }}{% endif %}</div>
+          {% if c.resolution %}<div class="small mt-2 p-2 rounded-3" style="background:var(--surface-2)"><b>Resolution:</b> {{ c.resolution }}</div>{% endif %}
+          {% if c.handled_by_name %}<div class="small-note mt-1"><i class="bi bi-person-badge me-1"></i>{{ c.handled_by_name }}</div>{% endif %}
+          {% if status in ('OPEN','INVESTIGATING') %}
+            <form method="post" class="mt-2">
+              <input type="hidden" name="complaint_id" value="{{ c.complaint_id }}">
+              <div class="input-group input-group-sm mb-1">
+                <select name="status" class="form-select">
+                  {% if status == 'OPEN' %}<option>INVESTIGATING</option>{% endif %}
+                  <option>RESOLVED</option><option>REJECTED</option>
+                  {% if status == 'INVESTIGATING' %}<option>OPEN</option>{% endif %}
+                </select>
+                <button class="btn btn-accent">Move</button>
+              </div>
+              <input name="resolution" class="form-control form-control-sm" placeholder="Resolution note (needed to close)">
+            </form>
+          {% endif %}
+        </div>
+      {% else %}<div class="small-note mt-3">Nothing here.</div>{% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

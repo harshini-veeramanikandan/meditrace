@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}System{% endblock %}
+{% block page_title %}System{% endblock %}
+{% block page_sub %}Tunable settings and a live inventory of every database object (information_schema){% endblock %}
+{% block content %}
+{% set routines_by = {} %}{% for r in routines %}{% set _ = routines_by.update({r.type: routines_by.get(r.type, 0) + 1}) %}{% endfor %}
+<div class="kpi-grid mb-3">
+  {% for icon, tint, n, label in [('bi-table','tint-blue', tables|length, 'Tables'), ('bi-eye','tint-green', views|length, 'Views'),
+       ('bi-lightning-charge','tint-orange', triggers|length, 'Triggers'), ('bi-gear','tint-purple', routines_by.get('PROCEDURE', 0), 'Procedures'),
+       ('bi-braces','tint-pink', routines_by.get('FUNCTION', 0), 'Functions'), ('bi-sort-down','tint-yellow', indexes|length, 'Indexes'),
+       ('bi-calendar-event','tint-slate', events|length, 'Events')] %}
+  <div class="panel kpi"><div class="kpi-icon {{ tint }}"><i class="bi {{ icon }}"></i></div>
+    <div><div class="kpi-num">{{ n }}</div><div class="kpi-label">{{ label }}</div></div></div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-xl-4">
+    <div class="panel">
+      <div class="panel-head"><h3><i class="bi bi-speedometer2 me-1"></i>Impossible-travel limit</h3><span class="tag">sp_set_speed_limit</span></div>
+      {% set cur = (settings|selectattr('setting_key','equalto','max_speed_kmph')|first).setting_value|int %}
+      <form method="post">
+        <div class="d-flex align-items-end gap-2 mb-2"><div class="kpi-num" id="spv">{{ cur }}</div><div class="muted mb-1">km/h</div></div>
+        <input type="range" class="form-range" name="max_speed" min="20" max="1000" step="10" value="{{ cur }}" oninput="spv.textContent=this.value">
+        <div class="d-flex small-note mb-3"><span>20</span><span class="ms-auto">1000</span></div>
+        <button class="btn btn-accent w-100">Save limit</button>
+      </form>
+      <div class="small-note mt-3">The trigger reads this value on every scan. A scan whose required speed is higher becomes SUSPICIOUS. Values outside 20–1000 are rejected with SIGNAL.</div>
+      <hr>
+      <div class="panel-head mb-2"><h3>Scheduled events</h3></div>
+      {% for e in events %}<div class="small"><code>{{ e.name }}</code> every {{ e.every }} {{ e.unit|lower }} · {{ e.status }}</div>
+      {% else %}<div class="small-note">None</div>{% endfor %}
+    </div>
+  </div>
+  <div class="col-xl-8">
+    <div class="panel">
+      <div class="panel-head"><h3>Triggers</h3><span class="tag">information_schema.TRIGGERS</span></div>
+      <div class="table-wrap"><table class="table table-hover align-middle small">
+        <thead><tr><th>Trigger</th><th>Fires</th><th>On table</th></tr></thead>
+        <tbody>{% for t in triggers %}<tr><td class="mono">{{ t.name }}</td>
+          <td><span class="role-badge {{ 'role-REGULATOR' if t.timing == 'BEFORE' else 'role-PHARMACIST' }}">{{ t.timing }}</span> {{ t.event }}</td>
+          <td class="mono">{{ t.tbl }}</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-4"><div class="panel">
+    <div class="panel-head"><h3>Tables</h3><span class="tag">rows</span></div>
+    {% set mx = (tables|map(attribute='rows')|max) or 1 %}
+    {% for t in tables %}<div class="mb-2"><div class="d-flex small"><span class="mono">{{ t.name }}</span><span class="ms-auto fw-semibold">{{ t.rows }}</span></div>
+      <div class="bar" style="height:5px"><div style="width:{{ 100 * t.rows / mx }}%;background:linear-gradient(90deg,#0ea5e9,#10b981)"></div></div></div>{% endfor %}
+  </div></div>
+  <div class="col-xl-4"><div class="panel">
+    <div class="panel-head"><h3>Procedures &amp; functions</h3></div>
+    {% for r in routines %}<div class="d-flex small py-1" style="border-bottom:1px dashed var(--border)"><span class="mono">{{ r.name }}</span><span class="ms-auto small-note">{{ r.type }}</span></div>{% endfor %}
+    <div class="panel-head mt-3 mb-2"><h3>Views</h3></div>
+    <div class="d-flex flex-wrap gap-1">{% for v in views %}<span class="tag mono" style="font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid var(--border)">{{ v.name }}</span>{% endfor %}</div>
+  </div></div>
+  <div class="col-xl-4"><div class="panel">
+    <div class="panel-head"><h3>Secondary indexes</h3></div>
+    {% for i in indexes %}<div class="small py-1" style="border-bottom:1px dashed var(--border)"><span class="mono">{{ i.name }}</span>
+      {% if not i.non_unique|int %}<span class="role-badge role-MANUFACTURER ms-1">UNIQUE</span>{% endif %}
+      <div class="small-note">{{ i.tbl }} ({{ i.cols }})</div></div>{% endfor %}
+  </div></div>
+</div>
+{% endblock %}

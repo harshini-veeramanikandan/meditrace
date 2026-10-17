@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify your medicine · MediTrace</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <style>
+    .hero { background: radial-gradient(900px 400px at 15% 0%, rgba(16,185,129,.35), transparent 60%),
+            radial-gradient(800px 400px at 85% 100%, rgba(14,165,233,.35), transparent 60%), #0b1220;
+            color: #e2e8f0; padding: 26px 0 120px; }
+    .hero h1 { font-size: 42px; font-weight: 800; letter-spacing: -1.2px; color: #fff; }
+    .hero h1 span { background: linear-gradient(90deg,#34d399,#38bdf8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lift { margin-top: -86px; }
+    .search-card { background: var(--surface); border-radius: 20px; box-shadow: 0 20px 60px rgba(2,6,23,.25); padding: 22px; border: 1px solid var(--border); }
+    .how { display: flex; gap: 12px; align-items: flex-start; }
+    .how .n { width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<section class="hero">
+  <div class="container" style="max-width:980px">
+    <div class="d-flex align-items-center gap-2 mb-5">
+      <div class="brand-logo"><i class="bi bi-shield-check"></i></div><div class="brand-name">Medi<span>Trace</span></div>
+      <span class="ms-2 small" style="color:#94a3b8">Patient portal</span>
+      <a href="{{ url_for('login') }}" class="btn btn-sm ms-auto" style="background:rgba(255,255,255,.08);color:#fff">Staff sign in</a>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,.08);color:#fff" onclick="toggleTheme()"><i id="themeIcon" class="bi bi-moon-stars"></i></button>
+    </div>
+    <h1>Is your medicine <span>genuine?</span></h1>
+    <p style="color:#94a3b8;max-width:560px">Type the serial number printed on the strip. We check it against every manufacturer's registry and every pharmacy scan, without marking it as sold.</p>
+  </div>
+</section>
+
+<div class="container lift pb-5" style="max-width:980px">
+  <div class="search-card mb-4">
+    <form class="row g-2">
+      <div class="col-md-6"><input name="serial" value="{{ serial }}" class="form-control form-control-lg mono" placeholder="Serial number, e.g. PCM2026A-00003" required></div>
+      <div class="col-md-3"><input name="city" value="{{ city }}" class="form-control form-control-lg" placeholder="Your city (optional)"></div>
+      <div class="col-md-3"><button class="btn btn-accent btn-lg w-100"><i class="bi bi-search me-1"></i>Check</button></div>
+    </form>
+    <div class="d-flex gap-1 mt-2 flex-wrap small-note">Try:
+      {% for s in ['PCM2026A-00003','PCM2026A-00012','PCM2026A-99999','AZI2026E-00003','MET2026C-00007','AMX2024X-00004'] %}
+        <a class="mono" href="?serial={{ s }}">{{ s }}</a>{% if not loop.last %} ·{% endif %}{% endfor %}
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="alert alert-{{ cat }} flash">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if result %}
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <div class="verdict-hero vh-{{ result.tone }} h-100">
+        <i class="bi {{ result.icon }} vh-icon"></i>
+        <h2 class="mt-2">{{ result.title }}</h2>
+        <div class="reason">{{ result.text }}</div>
+        <span class="chip mt-3"><i class="bi bi-upc"></i>{{ serial }}</span>
+        <span class="chip"><i class="bi bi-people"></i>checked {{ result.checked }} time{{ 's' if result.checked != 1 }}</span>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="panel">
+        <div class="panel-head"><h3>Strip details</h3></div>
+        {% if result.details %}
+          {% for k, v in [('Medicine', result.details.medicine), ('Manufacturer', result.details.manufacturer),
+                          ('Batch', result.details.batch_no), ('Manufactured', result.details.mfg_date|dt),
+                          ('Expires', result.details.expiry_date|dt),
+                          ('Sold through a pharmacy', 'Yes' if result.details.status == 'SOLD' else 'Not yet')] %}
+            <div class="d-flex py-2" style="border-bottom:1px dashed var(--border)"><span class="muted small">{{ k }}</span><span class="ms-auto fw-semibold small">{{ v }}</span></div>
+          {% endfor %}
+          {% if result.details.recall_reason %}<div class="small mt-2 text-danger"><b>Recall reason:</b> {{ result.details.recall_reason }}</div>{% endif %}
+        {% else %}
+          <p class="small muted mb-0">No manufacturer has registered this serial, so there are no details to show.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel mb-4">
+    <div class="panel-head"><h3><i class="bi bi-megaphone me-1"></i>Report a problem with this strip</h3>
+      <span class="right small-note">priority is decided automatically by the database</span></div>
+    <form method="post" action="{{ url_for('file_complaint') }}" class="row g-2">
+      <input type="hidden" name="serial" value="{{ serial }}">
+      <div class="col-md-4"><input name="name" class="form-control" placeholder="Your name" required></div>
+      <div class="col-md-4"><input name="phone" class="form-control" placeholder="Phone (10 digits, optional)" pattern="[0-9]{10}"></div>
+      <div class="col-md-4"><input name="city" value="{{ city }}" class="form-control" placeholder="City" required></div>
+      <div class="col-12"><textarea name="description" class="form-control" rows="2" placeholder="What looks wrong? Where did you buy it?" required></textarea></div>
+      <div class="col-12"><button class="btn btn-accent"><i class="bi bi-send me-1"></i>Submit complaint</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-md-8">
+      <div class="panel">
+        <div class="panel-head"><h3>How the check works</h3></div>
+        <div class="row g-3">
+          {% for t, d in [('Registry lookup', 'Was this serial created by a licensed manufacturer?'),
+                          ('Copy detection', 'Has the same serial been sold more than once, or in two far-apart cities?'),
+                          ('Safety', 'Has the batch been recalled, or has the strip expired?')] %}
+          <div class="col-md-4"><div class="how"><div class="n">{{ loop.index }}</div><div><b class="small">{{ t }}</b><div class="small-note">{{ d }}</div></div></div></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="panel">
+        <div class="panel-head"><h3>Community</h3></div>
+        <div class="d-flex justify-content-between text-center">
+          <div><div class="kpi-num">{{ stats.checks or 0 }}</div><div class="kpi-label">checks</div></div>
+          <div><div class="kpi-num text-danger">{{ stats.fakes or 0 }}</div><div class="kpi-label">fakes found</div></div>
+          <div><div class="kpi-num">{{ stats.cities or 0 }}</div><div class="kpi-label">cities</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

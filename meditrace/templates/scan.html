@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Scan{% endblock %}
+{% block page_title %}Scan a strip{% endblock %}
+{% block page_sub %}{% if fixed %}Counter at {{ my_pharmacy.name }}, {{ my_pharmacy.city }}{% else %}Insert a scan; the trigger decides the verdict{% endif %}{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-xl-5">
+    <div class="panel">
+      <ul class="nav nav-pills mb-3" role="tablist">
+        <li class="nav-item"><button class="nav-link {% if not bulk %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#single" type="button"><i class="bi bi-upc me-1"></i>Single scan</button></li>
+        <li class="nav-item"><button class="nav-link {% if bulk %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#bulkTab" type="button"><i class="bi bi-list-check me-1"></i>Bulk scan</button></li>
+      </ul>
+      <div class="tab-content">
+        <div class="tab-pane fade {% if not bulk %}show active{% endif %}" id="single">
+          <form method="post" id="scanForm">
+            <input type="hidden" name="mode" value="single">
+            <label class="form-label">Serial number</label>
+            <div class="input-group mb-2">
+              <input id="serialInput" name="serial_no" class="form-control form-control-lg mono" placeholder="PCM2026A-00001" required autofocus>
+              <button type="button" class="btn btn-soft" data-bs-toggle="modal" data-bs-target="#camModal" title="Scan QR with camera"><i class="bi bi-camera"></i></button>
+            </div>
+            <div class="mb-3 d-flex flex-wrap gap-1">
+              {% for s in sample %}<button type="button" class="btn btn-soft btn-sm mono py-0" style="font-size:11px" onclick="serialInput.value='{{ s }}'">{{ s }}</button>{% endfor %}
+            </div>
+            {% if fixed %}
+              <div class="mb-3 p-3 rounded-3" style="background:var(--surface-2);border:1px solid var(--border)">
+                <div class="small-note">Scanning at</div><div class="fw-semibold"><i class="bi bi-shop me-1"></i>{{ my_pharmacy.name }}, {{ my_pharmacy.city }}</div>
+              </div>
+            {% else %}
+              <label class="form-label">Pharmacy</label>
+              <select name="pharmacy_id" class="form-select mb-3">
+                {% for p in pharmacies %}<option value="{{ p.pharmacy_id }}" {% if result and result.pharmacy_id == p.pharmacy_id %}selected{% endif %}>{{ p.city }} · {{ p.name }}</option>{% endfor %}
+              </select>
+            {% endif %}
+            <label class="form-label">Scan time <span class="fw-normal">(empty = now)</span></label>
+            <input type="datetime-local" name="scan_time" class="form-control mb-3">
+            <button class="btn btn-accent btn-lg w-100"><i class="bi bi-shield-check me-1"></i>Verify strip</button>
+          </form>
+        </div>
+        <div class="tab-pane fade {% if bulk %}show active{% endif %}" id="bulkTab">
+          <form method="post">
+            <input type="hidden" name="mode" value="bulk">
+            <label class="form-label">Serial numbers, one per line (max 200)</label>
+            <textarea name="serials" rows="7" class="form-control mono mb-2" placeholder="PCM2026A-00010&#10;PCM2026A-00011&#10;FAKE-12345" required></textarea>
+            {% if not fixed %}
+              <select name="pharmacy_id" class="form-select mb-2">
+                {% for p in pharmacies %}<option value="{{ p.pharmacy_id }}">{{ p.city }} · {{ p.name }}</option>{% endfor %}
+              </select>
+            {% endif %}
+            <input type="datetime-local" name="scan_time" class="form-control mb-2">
+            <div class="small-note mb-3">Each strip is scanned one minute after the previous one.</div>
+            <button class="btn btn-accent w-100"><i class="bi bi-lightning-charge me-1"></i>Verify all</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    {% if result %}
+      <div class="verdict-hero vh-{{ result.verdict }} mb-3">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi vh-icon {{ {'GENUINE':'bi-patch-check-fill','COUNTERFEIT':'bi-x-octagon-fill','CLONED':'bi-files','SUSPICIOUS':'bi-geo-alt-fill','RECALLED':'bi-arrow-counterclockwise','EXPIRED':'bi-hourglass-bottom'}[result.verdict] }}"></i>
+          <div><h2>{{ result.verdict }}</h2><div class="reason">{{ result.reason }}</div></div>
+        </div>
+        <div class="mt-2">
+          <span class="chip"><i class="bi bi-upc"></i>{{ result.serial_no }}</span>
+          <span class="chip"><i class="bi bi-shop"></i>{{ result.pharmacy }}, {{ result.city }}</span>
+          <span class="chip"><i class="bi bi-clock"></i>{{ result.scan_time|dt }}</span>
+          {% if prev %}<span class="chip"><i class="bi bi-arrow-left-right"></i>from {{ prev.city }}</span>{% endif %}
+          {% if result.distance_km is not none and result.distance_km > 0 %}<span class="chip"><i class="bi bi-rulers"></i>{{ result.distance_km }} km</span>{% endif %}
+          {% if result.speed_kmph is not none and result.distance_km > 0 %}<span class="chip"><i class="bi bi-speedometer2"></i>{{ result.speed_kmph }} km/h needed</span>{% endif %}
+          <span class="chip"><i class="bi bi-cpu"></i>{{ result.ms }} ms</span>
+        </div>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-7">
+          <div class="panel">
+            <div class="panel-head"><h3>What the trigger checked</h3><span class="tag">trg_verify_scan</span></div>
+            {% for c in checks %}
+              <div class="check-row {{ c.state }}">
+                <div class="ci"><i class="bi {{ {'pass':'bi-check-lg','fail':'bi-x-lg','skip':'bi-dash'}[c.state] }}"></i></div>
+                <div><div class="cn">{{ loop.index }}. {{ c.name }}</div><div class="cd mono">{{ c.desc }}</div></div>
+                <span class="ms-auto small-note">{{ {'pass':'passed','fail':'FAILED','skip':'not needed'}[c.state] }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-md-5">
+          <div class="panel">
+            <div class="panel-head"><h3>Then automatically</h3></div>
+            {% if result.verdict == 'GENUINE' %}
+              <div class="feed-item"><i class="bi bi-tag text-success"></i><div class="small">Serial marked <b>SOLD</b> in <code>serial_registry</code></div></div>
+              <div class="feed-item"><i class="bi bi-journal-text text-info"></i><div class="small">Status change written to <code>serial_audit</code> by <code>trg_serial_audit</code></div></div>
+            {% else %}
+              <div class="feed-item"><i class="bi bi-bell text-danger"></i><div class="small">Alert raised in <code>alert</code> by <code>trg_scan_alert</code></div></div>
+              <div class="feed-item"><i class="bi bi-shield-lock text-warning"></i><div class="small">Scan kept as evidence; it can never be edited or deleted</div></div>
+            {% endif %}
+            <div class="feed-item"><i class="bi bi-hdd-stack text-primary"></i><div class="small">Row #{{ result.scan_id }} saved in <code>scan_log</code></div></div>
+            <a href="{{ url_for('trace', serial=result.serial_no) }}" class="btn btn-soft btn-sm w-100 mt-2"><i class="bi bi-signpost-split me-1"></i>Trace this strip</a>
+          </div>
+        </div>
+      </div>
+    {% elif bulk %}
+      {% set counts = {} %}{% for b in bulk %}{% set _ = counts.update({b.verdict: counts.get(b.verdict, 0) + 1}) %}{% endfor %}
+      <div class="panel mb-3">
+        <div class="panel-head"><h3>Bulk result · {{ bulk|length }} strips</h3>
+          <div class="right d-flex gap-1 flex-wrap">{% for k, v in counts.items() %}<span class="vb vb-{{ k }}">{{ v }} {{ k }}</span>{% endfor %}</div></div>
+        <div class="table-wrap"><table class="table table-hover align-middle">
+          <thead><tr><th>#</th><th>Serial</th><th>Verdict</th><th>Reason</th></tr></thead>
+          <tbody>{% for b in bulk %}<tr><td>{{ b.scan_id }}</td><td class="mono">{{ b.serial_no }}</td>
+            <td><span class="vb vb-{{ b.verdict }}">{{ b.verdict }}</span></td><td class="small">{{ b.reason }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </div>
+    {% else %}
+      <div class="panel mb-3 text-center py-5">
+        <div class="kpi-icon tint-green mx-auto mb-3" style="width:64px;height:64px;font-size:30px"><i class="bi bi-upc-scan"></i></div>
+        <h3 class="fw-bold">Ready to verify</h3>
+        <p class="muted mb-1">Type or scan a serial. The database runs 5 checks in under a second:</p>
+        <p class="small-note">registered · possible travel (≤ {{ limit|int }} km/h) · not sold before · not recalled · not expired</p>
+      </div>
+    {% endif %}
+
+    <div class="row g-3">
+      <div class="col-md-7">
+        <div class="panel">
+          <div class="panel-head"><h3>Recent scans{% if fixed %} here{% endif %}</h3></div>
+          {% for r in recent %}
+            <div class="feed-item">
+              <span class="feed-dot" style="background: var(--c-{{ r.verdict|lower }})"></span>
+              <div class="flex-grow-1"><a class="mono" href="{{ url_for('trace', serial=r.serial_no) }}">{{ r.serial_no }}</a>
+                <div class="small-note">{{ r.city }} · {{ r.scan_time|dt }}</div></div>
+              <span class="vb vb-{{ r.verdict }}" style="height:fit-content">{{ r.verdict }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="panel">
+          <div class="panel-head"><h3>Verdict mix{% if fixed %} here{% endif %}</h3></div>
+          <div style="height:220px"><canvas id="mixChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="camModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius:16px">
+    <div class="modal-header"><h5 class="modal-title"><i class="bi bi-camera me-2"></i>Scan QR code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><div id="qrReader" style="width:100%"></div>
+      <div class="small-note mt-2">Hold a QR label from the Batches → Labels page in front of the camera.</div></div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/qr/html5-qrcode.min.js') }}"></script>
+<script>
+const mix = {{ mix|tojson }};
+const keys = Object.keys(MT.verdict).filter(k => mix[k]);
+new Chart(document.getElementById('mixChart'), {
+  type: 'doughnut',
+  data: { labels: keys, datasets: [{ data: keys.map(k => mix[k]), backgroundColor: keys.map(k => MT.verdict[k]), borderWidth: 0, spacing: 2 }] },
+  options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'right' } } }
+});
+
+let qr = null;
+const camModal = document.getElementById('camModal');
+camModal.addEventListener('shown.bs.modal', () => {
+  qr = new Html5Qrcode('qrReader');
+  qr.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 }, text => {
+    document.getElementById('serialInput').value = text.trim();
+    qr.stop().then(() => { bootstrap.Modal.getInstance(camModal).hide(); document.getElementById('scanForm').requestSubmit(); });
+  }).catch(err => { document.getElementById('qrReader').innerHTML = '<div class="alert alert-warning mb-0">Camera not available: ' + err + '</div>'; });
+});
+camModal.addEventListener('hidden.bs.modal', () => { if (qr && qr.isScanning) qr.stop(); });
+</script>
+{% endblock %}

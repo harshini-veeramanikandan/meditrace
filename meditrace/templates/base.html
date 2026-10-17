@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}MediTrace{% endblock %} · MediTrace</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('home') }}">
+      <div class="brand-logo"><i class="bi bi-shield-check"></i></div>
+      <div><div class="brand-name">Medi<span>Trace</span></div><div class="brand-sub">Counterfeit medicine shield</div></div>
+    </a>
+    {% for group, items in nav %}
+      {% set visible = [] %}
+      {% for it in items %}{% if user.role in it[3] %}{% set _ = visible.append(it) %}{% endif %}{% endfor %}
+      {% if visible %}
+        <div class="nav-group">{{ group }}</div>
+        {% for ep, label, icon, roles in visible %}
+          <a class="side-link {% if request.endpoint == ep %}active{% endif %}" href="{{ url_for(ep) }}"
+             {% if ep == 'verify' %}target="_blank"{% endif %}>
+            <i class="bi {{ icon }}"></i>{{ label }}
+            {% if ep == 'alerts' and open_alerts %}<span class="count">{{ open_alerts }}</span>{% endif %}
+            {% if ep == 'complaints' and open_complaints %}<span class="count" style="background:#f97316">{{ open_complaints }}</span>{% endif %}
+            {% if ep == 'verify' %}<i class="bi bi-box-arrow-up-right ms-auto" style="font-size:12px"></i>{% endif %}
+          </a>
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+    <div class="sidebar-foot">
+      <div class="d-flex align-items-center gap-2 mb-1"><i class="bi bi-database-check text-success"></i> MySQL · trigger-verified</div>
+      BCSE302L · DA2
+      <div class="mt-1"><i class="bi bi-lightning-charge"></i> page built in {{ page_ms() }} ms · {{ page_queries() }} queries</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+      <div>
+        <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+        <p class="page-sub">{% block page_sub %}{% endblock %}</p>
+      </div>
+      <form class="top-search" action="{{ url_for('trace') }}">
+        <i class="bi bi-search"></i>
+        <input class="form-control form-control-sm" name="serial" placeholder="Trace a serial number..." style="height:38px">
+      </form>
+      {% if user.role != 'MANUFACTURER' %}
+      <div class="dropdown">
+        <button class="icon-btn" data-bs-toggle="dropdown" title="Open alerts">
+          <i class="bi bi-bell"></i>{% if open_alerts %}<span class="dot">{{ open_alerts }}</span>{% endif %}
+        </button>
+        <div class="dropdown-menu dropdown-menu-end p-2" style="width:360px">
+          <div class="px-2 py-1 fw-bold d-flex">Open alerts <span class="ms-auto small-note">{{ open_alerts }} total</span></div>
+          {% for a in bell %}
+            <div class="feed-item px-2">
+              <span class="vb sev-{{ a.severity }}" style="height:fit-content">{{ a.severity }}</span>
+              <div class="small"><div class="text-truncate" style="max-width:240px">{{ a.message }}</div>
+                <div class="small-note">{{ a.city }} · {{ a.created_at|dt }}</div></div>
+            </div>
+          {% else %}<div class="px-2 py-3 small-note">No open alerts.</div>{% endfor %}
+          {% if user.role in ('REGULATOR','PHARMACIST') %}
+            <a href="{{ url_for('alerts') }}" class="btn btn-soft btn-sm w-100 mt-1">View all alerts</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+      <button class="icon-btn" onclick="toggleTheme()" title="Light / dark"><i id="themeIcon" class="bi bi-moon-stars"></i></button>
+      <div class="dropdown">
+        <div class="user-chip" data-bs-toggle="dropdown" role="button">
+          <div class="avatar">{{ user.initials }}</div>
+          <div><div class="nm">{{ user.name }}</div><div class="rl"><span class="role-badge role-{{ user.role }}">{{ user.role }}</span></div></div>
+          <i class="bi bi-chevron-down small muted"></i>
+        </div>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><span class="dropdown-item-text small-note">Signed in as {{ session.username }}</span></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Sign out</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }} flash alert-dismissible fade show">
+            <i class="bi {{ {'success':'bi-check-circle','danger':'bi-x-circle','warning':'bi-exclamation-triangle'}.get(cat, 'bi-info-circle') }} me-2"></i>{{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chart/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script>MT.chartDefaults();</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

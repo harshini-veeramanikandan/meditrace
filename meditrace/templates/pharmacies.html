@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Pharmacies{% endblock %}
+{% block page_title %}Pharmacies{% endblock %}
+{% block page_sub %}Risk levels recomputed by the cursor procedure sp_update_risk_levels on every visit{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-xl-7">
+    <div class="panel">
+      <div class="panel-head"><h3>Network map</h3><span class="tag">risk_level · fn_pharmacy_risk()</span></div>
+      <div id="phMap" class="map" style="height:{{ rows|length * 22 + 50 }}px"></div>
+    </div>
+  </div>
+  <div class="col-xl-5">
+    <div class="panel">
+      <div class="panel-head"><h3>Flagged share per pharmacy</h3></div>
+      <div style="height:{{ rows|length * 22 + 50 }}px"><canvas id="riskChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+  <div class="top-search ms-0" style="display:block"><i class="bi bi-search"></i>
+    <input class="form-control" placeholder="Filter pharmacies by name or city..." oninput="filterCards(this.value, '.ph-item')" style="width:320px"></div>
+  {% for lv in ['HIGH','MEDIUM','LOW'] %}<button class="btn btn-soft btn-sm" onclick="filterCards('{{ lv }}', '.ph-item')"><span class="vb rk-{{ lv }}">{{ lv }}</span></button>{% endfor %}
+  <button class="btn btn-soft btn-sm" onclick="filterCards('', '.ph-item')">All</button>
+  <span class="ms-auto small-note">{{ rows|length }} pharmacies</span>
+</div>
+<div class="row g-3 mb-3">
+  {% for p in rows %}
+  <div class="col-md-6 col-xl-4 ph-item" data-search="{{ (p.name ~ ' ' ~ p.city ~ ' ' ~ p.risk_level)|lower }}">
+    <div class="m-card">
+      <div class="d-flex align-items-start gap-3">
+        <div class="kpi-icon {{ {'HIGH':'tint-red','MEDIUM':'tint-yellow','LOW':'tint-green'}[p.risk_level] }}"><i class="bi bi-shop"></i></div>
+        <div class="flex-grow-1"><div class="fw-bold">{{ p.name }}</div><div class="small-note">{{ p.city }} · <span class="mono">{{ p.license_no }}</span></div></div>
+        <span class="vb rk-{{ p.risk_level }}">{{ p.risk_level }}</span>
+      </div>
+      <div class="d-flex small mt-3 mb-1"><span>{{ p.flagged }} of {{ p.total_scans }} scans flagged</span><span class="ms-auto fw-bold">{{ p.risk_pct }}%</span></div>
+      <div class="bar"><div style="width:{{ p.risk_pct }}%;background:{{ {'HIGH':'#ef4444','MEDIUM':'#eab308','LOW':'#10b981'}[p.risk_level] }}"></div></div>
+      <div class="small-note mt-2"><i class="bi bi-clock me-1"></i>Last scan {{ p.last_scan|dt }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3><i class="bi bi-plus-circle me-1"></i>Add a pharmacy</h3><span class="tag">UNIQUE license_no · CHECK latitude / longitude</span></div>
+  <form method="post" class="row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label">Name</label><input name="name" class="form-control" placeholder="Nalam Medicals" required></div>
+    <div class="col-md-2"><label class="form-label">License no.</label><input name="license_no" class="form-control mono" placeholder="TN-RX-1005" required></div>
+    <div class="col-md-2"><label class="form-label">City</label><input name="city" class="form-control" placeholder="Tiruchirappalli" required></div>
+    <div class="col-md-2"><label class="form-label">Latitude</label><input name="latitude" type="number" step="0.000001" class="form-control" placeholder="10.7905" required></div>
+    <div class="col-md-2"><label class="form-label">Longitude</label><input name="longitude" type="number" step="0.000001" class="form-control" placeholder="78.7047" required></div>
+    <div class="col-md-1"><button class="btn btn-accent w-100">Add</button></div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ph = {{ rows|tojson }};
+const map = MT.map('phMap');
+const mx = Math.max(...ph.map(p => p.total_scans), 1);
+ph.forEach(p => L.circleMarker([p.latitude, p.longitude], { radius: 8 + 12 * p.total_scans / mx, color: '#fff', weight: 2, fillColor: MT.risk[p.risk_level], fillOpacity: .85 })
+  .bindTooltip(p.name + ', ' + p.city, { direction: 'right', offset: [8, 0] })
+  .bindPopup(`<b>${p.name}</b><br>${p.flagged}/${p.total_scans} flagged · ${p.risk_level}`).addTo(map));
+map.fitBounds(ph.map(p => [p.latitude, p.longitude]), { padding: [40, 40] });
+new Chart(document.getElementById('riskChart'), {
+  type: 'bar',
+  data: { labels: ph.map(p => p.city), datasets: [{ label: 'Flagged %', data: ph.map(p => p.risk_pct),
+          backgroundColor: ph.map(p => MT.risk[p.risk_level]), borderRadius: 6 }] },
+  options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } },
+             scales: { x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }, y: { grid: { display: false } } } }
+});
+</script>
+{% endblock %}

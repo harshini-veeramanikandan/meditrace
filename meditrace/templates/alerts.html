@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block page_title %}Alerts{% endblock %}
+{% block page_sub %}Raised by trigger trg_scan_alert; closed through sp_resolve_alert with the action taken{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  {% for k, icon, tint in [('CRITICAL','bi-exclamation-octagon','tint-red'),('HIGH','bi-exclamation-triangle','tint-orange'),('MEDIUM','bi-info-circle','tint-yellow')] %}
+  <div class="col-md-4"><a class="text-decoration-none" href="?severity={{ k }}&status=open">
+    <div class="panel kpi"><div class="kpi-icon {{ tint }}"><i class="bi {{ icon }}"></i></div>
+      <div><div class="kpi-num" style="color:var(--text)">{{ counts.get(k, 0) }}</div><div class="kpi-label">Open {{ k|lower }} alerts</div></div>
+      <i class="bi bi-chevron-right ms-auto muted"></i></div></a></div>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <form class="row g-2 mb-3 align-items-end">
+    <div class="col-md-3"><label class="form-label">Severity</label>
+      <select name="severity" class="form-select"><option value="">All</option>
+        {% for s in ['CRITICAL','HIGH','MEDIUM'] %}<option {% if f.severity == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label">Status</label>
+      <select name="status" class="form-select">
+        {% for v, l in [('open','Open'),('resolved','Resolved'),('all','All')] %}<option value="{{ v }}" {% if f.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label">Search</label><input name="q" value="{{ f.q }}" class="form-control" placeholder="serial, city, verdict..."></div>
+    <div class="col-md-3 d-flex gap-2"><button class="btn btn-accent flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+      <a class="btn btn-soft" href="{{ url_for('alerts_csv', **f) }}" title="Export CSV"><i class="bi bi-download"></i></a></div>
+  </form>
+  <div class="table-wrap"><table class="table table-hover align-middle">
+    <thead><tr><th>#</th><th>Severity</th><th>Pharmacy</th><th>Raised</th><th>Alert</th><th>Status</th><th>Action taken</th></tr></thead>
+    <tbody>
+    {% for a in rows %}
+      <tr>
+        <td class="muted">{{ a.alert_id }}</td>
+        <td><span class="vb sev-{{ a.severity }}">{{ a.severity }}</span></td>
+        <td>{{ a.pharmacy }}<div class="small-note">{{ a.city }}</div></td>
+        <td class="small">{{ a.created_at|dt }}</td>
+        <td class="small" style="max-width:420px">{{ a.message }}</td>
+        <td>{% if a.is_resolved %}<span class="small text-success"><i class="bi bi-check-circle me-1"></i>Resolved</span>
+              <div class="small-note">{{ a.resolved_at|dt }}{% if a.resolved_by_name %} · {{ a.resolved_by_name }}{% endif %}</div>
+            {% else %}<span class="small text-danger"><i class="bi bi-circle-fill me-1" style="font-size:8px"></i>Open</span>{% endif %}</td>
+        <td style="min-width:270px">{% if a.is_resolved %}<div class="small"><i class="bi bi-clipboard-check me-1 text-success"></i>{{ a.action_taken }}</div>
+            {% else %}<form method="post" action="{{ url_for('resolve_alert', alert_id=a.alert_id) }}" class="input-group input-group-sm">
+              <input name="action_taken" class="form-control" placeholder="Action taken (required)" required>
+              <button class="btn btn-accent" title="Resolve"><i class="bi bi-check2"></i></button></form>{% endif %}</td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="text-center py-4 muted">No alerts match.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Trace{% endblock %}
+{% block page_title %}Trace a strip{% endblock %}
+{% block page_sub %}Origin, every scan, every status change and every patient check of one serial{% endblock %}
+{% block content %}
+<div class="panel mb-3">
+  <form class="row g-2 align-items-center">
+    <div class="col-lg-6"><div class="input-group input-group-lg">
+      <span class="input-group-text" style="background:var(--surface);border-color:var(--border)"><i class="bi bi-upc"></i></span>
+      <input name="serial" class="form-control mono" value="{{ serial }}" placeholder="PCM2026A-00001" required></div></div>
+    <div class="col-lg-2"><button class="btn btn-accent btn-lg w-100">Trace</button></div>
+    <div class="col-lg-4 d-flex flex-wrap gap-1">
+      {% for e in examples %}<a class="btn btn-soft btn-sm mono py-0" style="font-size:11px" href="?serial={{ e }}">{{ e }}</a>{% endfor %}
+    </div>
+  </form>
+</div>
+
+{% if serial %}
+<div class="row g-3">
+  <div class="col-xl-4">
+    {% if details %}
+      {% set tone = {'UNSOLD_GENUINE':'GENUINE','SOLD_GENUINE':'GENUINE','COPIES_DETECTED':'SUSPICIOUS','RECALLED':'RECALLED','EXPIRED':'EXPIRED'}[details.state] %}
+      <div class="verdict-hero vh-{{ tone }} mb-3">
+        <div class="small" style="opacity:.85">Current state · fn_serial_status()</div>
+        <h2 style="font-size:24px">{{ details.state|replace('_',' ') }}</h2>
+        <div class="mono mt-1">{{ details.serial_no }}</div>
+      </div>
+      <div class="panel mb-3">
+        <div class="panel-head"><h3>Registered origin</h3></div>
+        {% for k, v in [('Medicine', details.medicine), ('Category', details.category), ('MRP', '₹' ~ details.mrp),
+                        ('Manufacturer', details.manufacturer), ('Batch', details.batch_no),
+                        ('Manufactured', details.mfg_date|dt), ('Expires', details.expiry_date|dt),
+                        ('Status', details.status ~ (' on ' ~ details.sold_at|dt if details.sold_at else '')),
+                        ('Recall', details.recall_reason if details.is_recalled else 'None')] %}
+          <div class="d-flex py-2" style="border-bottom:1px dashed var(--border)"><span class="muted small">{{ k }}</span><span class="ms-auto fw-semibold small text-end">{{ v }}</span></div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="verdict-hero vh-COUNTERFEIT mb-3">
+        <i class="bi bi-x-octagon-fill vh-icon"></i>
+        <h2 style="font-size:24px">Never registered</h2>
+        <div class="reason">No manufacturer created <span class="mono">{{ serial }}</span>. Every strip carrying it is counterfeit.</div>
+      </div>
+    {% endif %}
+    <div class="panel">
+      <div class="panel-head"><h3>Patient checks</h3><span class="tag">patient_check</span></div>
+      {% for c in checks %}
+        <div class="feed-item"><i class="bi bi-person"></i><div class="small flex-grow-1">{{ c.city or 'Unknown city' }}<div class="small-note">{{ c.checked_at|dt }}</div></div><span class="small-note">{{ c.result|replace('_',' ') }}</span></div>
+      {% else %}<div class="small-note">No patient has checked this strip yet.</div>{% endfor %}
+      {% if complaints %}
+        <hr><div class="panel-head mb-2"><h3>Complaints</h3></div>
+        {% for c in complaints %}<div class="small mb-2"><span class="vb pr-{{ c.priority }}">{{ c.priority }}</span> #{{ c.complaint_id }} · {{ c.status }} · {{ c.reporter_name }}</div>{% endfor %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-xl-8">
+    <div class="panel mb-3">
+      <div class="panel-head"><h3>Route</h3><span class="tag">v_scan_journey · ROW_NUMBER + LAG</span></div>
+      {% if journey %}<div id="routeMap" class="map" style="height:340px"></div>
+      {% else %}<div class="small-note">This strip has never been scanned.</div>{% endif %}
+    </div>
+    <div class="row g-3">
+      <div class="col-lg-7">
+        <div class="panel">
+          <div class="panel-head"><h3>Scan timeline</h3></div>
+          <div class="timeline">
+            {% for j in journey %}
+              <div class="tl-item">
+                <span class="tl-dot" style="background: var(--c-{{ j.verdict|lower }})"></span>
+                <div class="d-flex align-items-center gap-2"><b>Step {{ j.scan_seq }}</b><span class="vb vb-{{ j.verdict }}">{{ j.verdict }}</span>
+                  <span class="ms-auto small-note">{{ j.scan_time|dt }}</span></div>
+                <div class="small">{{ j.pharmacy }}, {{ j.city }}</div>
+                {% if j.from_city %}<div class="leg"><i class="bi bi-arrow-return-right"></i> from {{ j.from_city }}{% if j.distance_km %} · {{ j.distance_km }} km · {{ j.speed_kmph }} km/h{% endif %}</div>{% endif %}
+                <div class="small-note">{{ j.reason }}</div>
+              </div>
+            {% else %}<div class="small-note">No scans.</div>{% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="panel">
+          <div class="panel-head"><h3>Status audit</h3><span class="tag">trg_serial_audit</span></div>
+          {% for a in audit %}
+            <div class="feed-item"><i class="bi bi-arrow-right-circle text-success"></i>
+              <div class="small"><b>{{ a.old_status }} → {{ a.new_status }}</b><div class="small-note">{{ a.changed_at|dt }} · {{ a.changed_by }}</div></div></div>
+          {% else %}<div class="small-note">No status changes.</div>{% endfor %}
+          <div class="small-note mt-3"><i class="bi bi-shield-lock me-1"></i>A SOLD serial can never be reset to UNSOLD (<code>trg_serial_no_unsell</code>).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if serial and journey %}
+<script>
+const j = {{ journey|tojson }};
+const map = MT.map('routeMap');
+const pts = j.map(x => [x.latitude, x.longitude]);
+j.forEach((x, i) => {
+  if (i > 0) {
+    const bad = x.verdict === 'SUSPICIOUS';
+    L.polyline([pts[i - 1], pts[i]], { color: bad ? '#d946ef' : '#0ea5e9', weight: bad ? 4 : 3, dashArray: bad ? '8 6' : null }).addTo(map);
+  }
+  L.circleMarker(pts[i], { radius: 10, color: '#fff', weight: 2, fillColor: MT.verdict[x.verdict], fillOpacity: .95 })
+   .bindTooltip(`${x.scan_seq}. ${x.city}`, { permanent: true, direction: 'top', offset: [0, -8] })
+   .bindPopup(`<b>Step ${x.scan_seq}: ${x.verdict}</b><br>${x.pharmacy}, ${x.city}<br>${x.scan_time.replace('T', ' ')}`).addTo(map);
+});
+if (pts.length > 1) map.fitBounds(pts, { padding: [50, 50], maxZoom: 7 }); else map.setView(pts[0], 7);
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Query Lab{% endblock %}
+{% block page_title %}Query Lab{% endblock %}
+{% block page_sub %}Analysis queries run live against the database, with the SQL shown{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-xl-3">
+    <div class="panel">
+      <div class="panel-head"><h3>{{ queries|length }} queries</h3></div>
+      {% for key, title, concept, sql in queries %}
+        <a class="ql-item {% if key == item[0] %}active{% endif %}" href="?q={{ key }}">
+          <div class="t">{{ loop.index }}. {{ title }}</div><div class="c">{{ concept }}</div></a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-xl-9">
+    <div class="panel mb-3">
+      <div class="panel-head"><h3>{{ item[1] }}</h3><span class="tag">{{ item[2] }}</span>
+        <span class="right small-note"><i class="bi bi-stopwatch me-1"></i>{{ ms }} ms · {{ rows|length }} rows</span></div>
+      <pre class="sql" id="sql">{{ item[3] }}</pre>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Result</h3></div>
+      {% if error %}<div class="alert alert-danger mb-0">{{ error }}</div>
+      {% elif rows %}
+        <div class="table-wrap"><table class="table table-hover align-middle small">
+          <thead><tr>{% for c in rows[0].keys() %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+          <tbody>{% for r in rows %}<tr>{% for c, v in r.items() %}<td class="{% if v is number %}fw-semibold{% endif %}">
+            {% if v in ['GENUINE','COUNTERFEIT','CLONED','SUSPICIOUS','RECALLED','EXPIRED'] %}<span class="vb vb-{{ v }}">{{ v }}</span>{% else %}{{ v if v is not none else 'NULL' }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+      {% else %}<div class="small-note">No rows.</div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// light keyword highlighting
+const el = document.getElementById('sql');
+const kw = /\b(SELECT|FROM|JOIN|LEFT JOIN|WHERE|GROUP BY|HAVING|ORDER BY|LIMIT|WITH|AS|ON|AND|OR|NOT EXISTS|OVER|EXPLAIN|COUNT|SUM|AVG|MAX|DISTINCT|IN|ROUND|GROUP_CONCAT|SEPARATOR|DESC|CURDATE|TRUE|FIELD)\b/g;
+el.innerHTML = el.textContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(kw, '<span class="kw">$1</span>');
+</script>
+{% endblock %}

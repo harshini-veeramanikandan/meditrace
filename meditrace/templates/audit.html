@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Audit trail{% endblock %}
+{% block page_title %}Audit trail{% endblock %}
+{% block page_sub %}Who did what, every serial status change, and every public check{% endblock %}
+{% block content %}
+<div class="panel">
+  <ul class="nav nav-pills mb-3">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#t1"><i class="bi bi-person-lines-fill me-1"></i>User activity <span class="small-note">({{ activity|length }})</span></button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#t2"><i class="bi bi-arrow-left-right me-1"></i>Serial status changes <span class="small-note">({{ serial_audit|length }})</span></button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#t3"><i class="bi bi-patch-check me-1"></i>Patient checks <span class="small-note">({{ checks|length }})</span></button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#t4"><i class="bi bi-people me-1"></i>Users <span class="small-note">({{ users|length }})</span></button></li>
+  </ul>
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="t1"><div class="table-wrap"><table class="table table-hover align-middle small">
+      <thead><tr><th>#</th><th>When</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+      <tbody>{% for a in activity %}<tr><td class="muted">{{ a.log_id }}</td><td>{{ a.created_at|dt }}</td>
+        <td>{{ a.full_name or 'system' }} {% if a.role %}<span class="role-badge role-{{ a.role }}">{{ a.role }}</span>{% endif %}</td>
+        <td><code>{{ a.action }}</code></td><td>{{ a.details }}</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="tab-pane fade" id="t2"><div class="table-wrap"><table class="table table-hover align-middle small">
+      <thead><tr><th>#</th><th>Serial</th><th>Change</th><th>When</th><th>Database user</th></tr></thead>
+      <tbody>{% for a in serial_audit %}<tr><td class="muted">{{ a.audit_id }}</td><td><a class="mono" href="{{ url_for('trace', serial=a.serial_no) }}">{{ a.serial_no }}</a></td>
+        <td>{{ a.old_status }} → <b>{{ a.new_status }}</b></td><td>{{ a.changed_at|dt }}</td><td class="mono">{{ a.changed_by }}</td></tr>{% endfor %}</tbody></table></div>
+      <div class="small-note mt-2">Written by trigger <code>trg_serial_audit</code>; nobody inserts these rows by hand.</div></div>
+    <div class="tab-pane fade" id="t3"><div class="table-wrap"><table class="table table-hover align-middle small">
+      <thead><tr><th>#</th><th>Serial</th><th>City</th><th>When</th><th>Result</th></tr></thead>
+      <tbody>{% for c in checks %}<tr><td class="muted">{{ c.check_id }}</td><td><a class="mono" href="{{ url_for('trace', serial=c.serial_no) }}">{{ c.serial_no }}</a></td>
+        <td>{{ c.city or '-' }}</td><td>{{ c.checked_at|dt }}</td><td>{{ c.result|replace('_',' ') }}</td></tr>{% endfor %}</tbody></table></div></div>
+    <div class="tab-pane fade" id="t4"><div class="table-wrap"><table class="table table-hover align-middle small">
+      <thead><tr><th>#</th><th>Username</th><th>Name</th><th>Role</th><th>Last login</th><th>Password</th></tr></thead>
+      <tbody>{% for u in users %}<tr><td class="muted">{{ u.user_id }}</td><td class="mono">{{ u.username }}</td><td>{{ u.full_name }}</td>
+        <td><span class="role-badge role-{{ u.role }}">{{ u.role }}</span></td><td>{{ u.last_login|dt }}</td><td class="small-note">SHA-256 hash only</td></tr>{% endfor %}</tbody></table></div></div>
+  </div>
+</div>
+{% endblock %}

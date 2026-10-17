@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Batches{% endblock %}
+{% block page_title %}Batches{% endblock %}
+{% block page_sub %}Register production runs, recall unsafe ones, print QR labels{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  {% for k, icon, tint in [('ACTIVE','bi-check-circle','tint-green'),('EXPIRING SOON','bi-hourglass-split','tint-yellow'),('EXPIRED','bi-hourglass-bottom','tint-slate'),('RECALLED','bi-arrow-counterclockwise','tint-purple')] %}
+  <div class="col-6 col-xl-3"><div class="panel kpi"><div class="kpi-icon {{ tint }}"><i class="bi {{ icon }}"></i></div>
+    <div><div class="kpi-num">{{ states.get(k, 0) }}</div><div class="kpi-label">{{ k|title }} batches</div></div></div></div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-xl-7">
+    <div class="panel">
+      <div class="panel-head"><h3><i class="bi bi-plus-square me-1"></i>Register a batch</h3><span class="tag">sp_register_batch · TRANSACTION</span></div>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="action" value="register">
+        <div class="col-md-6"><label class="form-label">Medicine</label>
+          <select name="medicine_id" class="form-select">{% for m in medicines %}<option value="{{ m.medicine_id }}">{{ m.name }} · {{ m.manufacturer }}</option>{% endfor %}</select></div>
+        <div class="col-md-3"><label class="form-label">Batch number</label><input name="batch_no" class="form-control mono" placeholder="PCM2026G" required></div>
+        <div class="col-md-3"><label class="form-label">Strips</label><input type="number" name="count" class="form-control" value="20" min="1" max="10000" required></div>
+        <div class="col-md-4"><label class="form-label">Mfg date</label><input type="date" name="mfg_date" class="form-control" required></div>
+        <div class="col-md-4"><label class="form-label">Expiry date</label><input type="date" name="expiry_date" class="form-control" required></div>
+        <div class="col-md-4 d-flex align-items-end"><button class="btn btn-accent w-100"><i class="bi bi-box-seam me-1"></i>Register</button></div>
+      </form>
+      <div class="small-note mt-2">The batch and all its serials are saved in one transaction. A duplicate batch number or a bad date rolls everything back.</div>
+    </div>
+  </div>
+  <div class="col-xl-5">
+    <div class="panel">
+      <div class="panel-head"><h3><i class="bi bi-exclamation-octagon me-1 text-danger"></i>Recall a batch</h3><span class="tag">sp_recall_batch</span></div>
+      <form method="post" class="row g-2">
+        <input type="hidden" name="action" value="recall">
+        <div class="col-12"><label class="form-label">Batch</label>
+          <select name="batch_no" class="form-select">{% for b in batches if not b.is_recalled %}<option value="{{ b.batch_no }}">{{ b.batch_no }} · {{ b.medicine }}</option>{% endfor %}</select></div>
+        <div class="col-12"><label class="form-label">Reason</label><input name="reason" class="form-control" placeholder="Contamination found in lab test" required></div>
+        <div class="col-12"><button class="btn btn-outline-danger w-100">Recall batch</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3>All batches</h3><span class="tag">v_batch_status</span>
+    <div class="right top-search" style="display:block"><i class="bi bi-search"></i>
+      <input class="form-control form-control-sm" style="height:36px" placeholder="Filter batch, medicine, state..." oninput="filterCards(this.value, '.b-item')"></div></div>
+  <div class="table-wrap"><table class="table table-hover align-middle">
+    <thead><tr><th>Batch</th><th>Medicine</th><th>Manufacturer</th><th>Expiry</th><th style="width:20%">Sold</th><th>State</th><th></th></tr></thead>
+    <tbody>
+    {% for b in batches %}
+      {% set pct = (100 * (b.sold or 0) / b.total_serials) if b.total_serials else 0 %}
+      <tr class="b-item" data-search="{{ (b.batch_no ~ ' ' ~ b.medicine ~ ' ' ~ b.manufacturer ~ ' ' ~ b.batch_state)|lower }}">
+        <td><b class="mono">{{ b.batch_no }}</b><div class="small-note">{{ b.total_serials }} serials</div></td>
+        <td>{{ b.medicine }}</td><td class="small">{{ b.manufacturer }}</td>
+        <td class="small">{{ b.expiry_date|dt }}<div class="small-note">{{ b.days_to_expiry }} days</div></td>
+        <td><div class="d-flex small mb-1"><span>{{ b.sold or 0 }} / {{ b.total_serials }}</span><span class="ms-auto muted">{{ pct|round|int }}%</span></div>
+          <div class="bar"><div style="width:{{ pct }}%;background:linear-gradient(90deg,#10b981,#0ea5e9)"></div></div></td>
+        <td><span class="vb st-{{ b.batch_state.split(' ')[0] }}">{{ b.batch_state }}</span>
+          {% if b.recall_reason %}<div class="small-note">{{ b.recall_reason }}</div>{% endif %}</td>
+        <td><a class="btn btn-soft btn-sm" href="{{ url_for('labels', batch_no=b.batch_no) }}" target="_blank"><i class="bi bi-qr-code me-1"></i>Labels</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

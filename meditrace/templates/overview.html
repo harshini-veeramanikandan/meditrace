@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block page_title %}Overview{% endblock %}
+{% block page_sub %}Live picture of every scan verified by the database{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3 gap-3">
+  <div class="small-note"><i class="bi bi-database me-1"></i>{{ kpis.serials }} registered serials · speed limit enforced by <code>trg_verify_scan</code></div>
+  <div class="form-check form-switch ms-auto mb-0">
+    <input class="form-check-input" type="checkbox" id="autoRefresh">
+    <label class="form-check-label small-note" for="autoRefresh">Auto-refresh every 15 s</label>
+  </div>
+  <a href="{{ url_for('scans_csv') }}" class="btn btn-soft btn-sm"><i class="bi bi-download me-1"></i>Export scans CSV</a>
+</div>
+
+<div class="row g-3 mb-3">
+  {% for icon, tint, num, label in [
+      ('bi-upc-scan','tint-blue', kpis.total, 'Total scans'),
+      ('bi-patch-check','tint-green', kpis.genuine_rate ~ '%', 'Genuine rate'),
+      ('bi-shield-exclamation','tint-red', kpis.fraud, 'Fakes caught'),
+      ('bi-capsule','tint-purple', kpis.unsafe, 'Unsafe blocked'),
+      ('bi-bell','tint-orange', open_alerts, 'Open alerts'),
+      ('bi-people','tint-pink', kpis.checks, 'Patient checks')] %}
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="panel kpi"><div class="kpi-icon {{ tint }}"><i class="bi {{ icon }}"></i></div>
+      <div><div class="kpi-num">{{ num }}</div><div class="kpi-label">{{ label }}</div></div></div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-xl-8">
+    <div class="panel">
+      <div class="panel-head"><h3>Scans per day</h3><span class="tag">v_daily_trend</span>
+        <span class="right small-note">genuine vs fraud vs unsafe stock</span></div>
+      <div style="height:280px"><canvas id="trendChart"></canvas></div>
+    </div>
+  </div>
+  <div class="col-xl-4">
+    <div class="panel">
+      <div class="panel-head"><h3>Verdict mix</h3><span class="tag">v_summary</span></div>
+      <div style="height:280px"><canvas id="mixChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-xl-7">
+    <div class="panel">
+      <div class="panel-head"><h3>Fraud map</h3><span class="tag">v_pharmacy_risk · v_travel_anomalies</span></div>
+      <div id="fraudMap" class="map" style="height:420px"></div>
+      <div class="d-flex gap-3 mt-2 small-note flex-wrap">
+        <span><span class="feed-dot d-inline-block" style="background:#ef4444"></span> High-risk pharmacy</span>
+        <span><span class="feed-dot d-inline-block" style="background:#eab308"></span> Medium</span>
+        <span><span class="feed-dot d-inline-block" style="background:#10b981"></span> Low</span>
+        <span><span style="display:inline-block;width:22px;border-top:2px dashed #d946ef;vertical-align:middle"></span> Impossible-travel route</span>
+        <span class="ms-auto">circle size = number of scans</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-5">
+    <div class="panel">
+      <div class="panel-head"><h3>Top 12 cities by fraud</h3><span class="tag">RANK() OVER</span></div>
+      <div style="height:420px"><canvas id="cityChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-4">
+    <div class="panel">
+      <div class="panel-head"><h3>Live scan feed</h3><a class="right small" href="{{ url_for('scan') }}">Scan now →</a></div>
+      {% for r in recent %}
+        <div class="feed-item">
+          <span class="feed-dot" style="background: var(--c-{{ r.verdict|lower }})"></span>
+          <div class="flex-grow-1"><a href="{{ url_for('trace', serial=r.serial_no) }}" class="mono">{{ r.serial_no }}</a>
+            <div class="small-note">{{ r.city }} · {{ r.scan_time|dt }}</div></div>
+          <span class="vb vb-{{ r.verdict }}" style="height:fit-content">{{ r.verdict }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-xl-5">
+    <div class="panel">
+      <div class="panel-head"><h3>Priority alerts</h3><span class="tag">trg_scan_alert</span>
+        <a class="right small" href="{{ url_for('alerts') }}">All {{ open_alerts }} →</a></div>
+      {% for a in alerts %}
+        <div class="feed-item">
+          <span class="vb sev-{{ a.severity }}" style="height:fit-content;min-width:74px;justify-content:center">{{ a.severity }}</span>
+          <div class="small"><div>{{ a.message }}</div><div class="small-note">{{ a.pharmacy }}, {{ a.city }} · {{ a.created_at|dt }}</div></div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-xl-3">
+    <div class="panel">
+      <div class="panel-head"><h3>Most-copied brands</h3></div>
+      {% set top = (brands|map(attribute='copy_incidents')|max) if brands else 1 %}
+      {% for b in brands %}
+        <div class="mb-3">
+          <div class="d-flex small"><span class="fw-semibold">{{ b.medicine }}</span><span class="ms-auto fw-bold">{{ b.copy_incidents }}</span></div>
+          <div class="small-note mb-1">{{ b.manufacturer }}</div>
+          <div class="bar"><div style="width: {{ 100 * b.copy_incidents / top }}%; background: linear-gradient(90deg,#f97316,#d946ef)"></div></div>
+        </div>
+      {% endfor %}
+      <hr>
+      <div class="panel-head mb-2"><h3>Open alerts by severity</h3></div>
+      {% set sevmap = {} %}{% for r in sev %}{% set _ = sevmap.update({r.severity: r.n}) %}{% endfor %}
+      {% for k in ['CRITICAL','HIGH','MEDIUM'] %}
+        <div class="d-flex align-items-center mb-2"><span class="vb sev-{{ k }}">{{ k }}</span><span class="ms-auto fw-bold">{{ sevmap.get(k, 0) }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+setupAutoRefresh('autoRefresh', 15);
+const trend = {{ trend|tojson }}, cities = {{ cities|tojson }}.slice(0, 12), pharm = {{ pharmacies|tojson }}, routes = {{ anomalies|tojson }};
+const s = {{ s|tojson }};
+const day = d => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', {day: 'numeric', month: 'short'});
+
+new Chart(document.getElementById('trendChart'), {
+  type: 'bar',
+  data: { labels: trend.map(r => day(r.scan_date)), datasets: [
+    { label: 'Genuine', data: trend.map(r => r.genuine), backgroundColor: MT.verdict.GENUINE, borderRadius: 6, stack: 's' },
+    { label: 'Fraud', data: trend.map(r => r.fraud), backgroundColor: MT.verdict.COUNTERFEIT, borderRadius: 6, stack: 's' },
+    { label: 'Unsafe stock', data: trend.map(r => r.unsafe_stock), backgroundColor: MT.verdict.RECALLED, borderRadius: 6, stack: 's' } ]},
+  options: { maintainAspectRatio: false, plugins: { legend: { position: 'top', align: 'end' } },
+    scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } }
+});
+
+const mixKeys = ['genuine','counterfeit','cloned','suspicious','recalled','expired'];
+new Chart(document.getElementById('mixChart'), {
+  type: 'doughnut',
+  data: { labels: mixKeys.map(k => k[0].toUpperCase() + k.slice(1)),
+          datasets: [{ data: mixKeys.map(k => s[k] || 0), backgroundColor: mixKeys.map(k => MT.verdict[k.toUpperCase()]), borderWidth: 0, spacing: 2 }] },
+  options: { maintainAspectRatio: false, cutout: '68%', plugins: { legend: { position: 'bottom' } } },
+  plugins: [{ id: 'center', afterDraw(c) { const {ctx, chartArea: a} = c; ctx.save();
+    ctx.textAlign = 'center'; ctx.fillStyle = MT.dark() ? '#e5e7eb' : '#0f172a'; ctx.font = '800 28px Inter';
+    ctx.fillText(s.total_scans, (a.left + a.right) / 2, (a.top + a.bottom) / 2 + 4);
+    ctx.font = '500 12px Inter'; ctx.fillStyle = '#94a3b8'; ctx.fillText('scans', (a.left + a.right) / 2, (a.top + a.bottom) / 2 + 22); ctx.restore(); } }]
+});
+
+new Chart(document.getElementById('cityChart'), {
+  type: 'bar',
+  data: { labels: cities.map(c => '#' + c.fraud_rank + ' ' + c.city), datasets: [
+    { label: 'Counterfeit', data: cities.map(c => c.counterfeit), backgroundColor: MT.verdict.COUNTERFEIT, borderRadius: 5 },
+    { label: 'Cloned', data: cities.map(c => c.cloned), backgroundColor: MT.verdict.CLONED, borderRadius: 5 },
+    { label: 'Suspicious', data: cities.map(c => c.suspicious), backgroundColor: MT.verdict.SUSPICIOUS, borderRadius: 5 },
+    { label: 'Unsafe stock', data: cities.map(c => c.unsafe_stock), backgroundColor: MT.verdict.RECALLED, borderRadius: 5 } ]},
+  options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { position: 'top', align: 'end' } },
+    scales: { x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }, y: { stacked: true, grid: { display: false } } } }
+});
+
+const map = MT.map('fraudMap');
+const maxScans = Math.max(...pharm.map(p => p.total_scans), 1);
+pharm.forEach(p => {
+  L.circleMarker([p.latitude, p.longitude], { radius: 7 + 13 * p.total_scans / maxScans, color: '#fff', weight: 2,
+      fillColor: MT.risk[p.risk_level], fillOpacity: .85 })
+   .bindPopup(`<b>${p.name}</b><br>${p.city} · ${p.license_no}<br>${p.flagged}/${p.total_scans} scans flagged (${p.risk_pct}%)<br>Risk: <b>${p.risk_level}</b>`)
+   .bindTooltip(p.city + ' · ' + p.risk_level, { direction: 'right', offset: [8, 0] }).addTo(map);
+});
+map.fitBounds(pharm.map(p => [p.latitude, p.longitude]), { padding: [40, 40] });
+routes.forEach(r => {
+  L.polyline([[r.from_lat, r.from_lon], [r.to_lat, r.to_lon]], { color: '#d946ef', weight: 3, dashArray: '7 6' })
+   .bindPopup(`<b>${r.serial_no}</b><br>${r.from_city} → ${r.to_city}<br>${r.distance_km} km at ${r.speed_kmph} km/h`).addTo(map);
+});
+</script>
+{% endblock %}

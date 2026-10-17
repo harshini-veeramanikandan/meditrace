@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ b.batch_no }} labels · MediTrace</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <style>
+    body { background: #fff; color: #0f172a; }
+    .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .label { border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 12px; text-align: center; break-inside: avoid; }
+    .label svg { width: 120px; height: 120px; }
+    .label .sn { font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 13px; margin-top: 4px; }
+    .label .meta { font-size: 10.5px; color: #64748b; }
+    .sold { opacity: .45; }
+    @media print { .no-print { display: none !important; } .label { border-color: #94a3b8; } }
+  </style>
+</head>
+<body class="p-4">
+  <div class="d-flex align-items-center gap-3 mb-4 no-print">
+    <div class="brand-logo"><i class="bi bi-qr-code"></i></div>
+    <div><h3 class="fw-bold mb-0">{{ b.batch_no }} · {{ b.medicine }}</h3>
+      <div class="muted small">{{ b.manufacturer }} · expires {{ b.expiry_date|dt }} · showing {{ serials|length }} of {{ b.total_serials }} labels · faded = already sold</div></div>
+    <button class="btn btn-accent ms-auto" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+  </div>
+  <div class="sheet">
+    {% for s in serials %}
+      <div class="label {% if s.status == 'SOLD' %}sold{% endif %}">
+        <div class="qr" data-serial="{{ s.serial_no }}"></div>
+        <div class="sn">{{ s.serial_no }}</div>
+        <div class="meta">{{ b.medicine }} · Exp {{ b.expiry_date.strftime('%m/%Y') }}</div>
+        <div class="meta">Verify: MediTrace patient portal</div>
+      </div>
+    {% endfor %}
+  </div>
+  <script src="{{ url_for('static', filename='vendor/qr/qrcode.js') }}"></script>
+  <script>
+    document.querySelectorAll('.qr').forEach(el => {
+      const qr = qrcode(0, 'M'); qr.addData(el.dataset.serial); qr.make();
+      el.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    });
+  </script>
+</body>
+</html>

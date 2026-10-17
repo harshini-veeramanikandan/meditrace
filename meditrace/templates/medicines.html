@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Medicines{% endblock %}
+{% block page_title %}Medicine catalogue{% endblock %}
+{% block page_sub %}Every registered drug with its stock and copy incidents (view v_medicine_catalogue){% endblock %}
+{% block content %}
+{% set cats = {} %}{% for m in rows %}{% set _ = cats.update({m.category: cats.get(m.category, 0) + 1}) %}{% endfor %}
+<div class="panel mb-3">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <div class="top-search ms-0" style="display:block"><i class="bi bi-search"></i>
+      <input class="form-control" placeholder="Search medicine, composition, manufacturer..." oninput="filterCards(this.value, '.med-item')" style="width:340px"></div>
+    <button class="btn btn-soft btn-sm" onclick="filterCards('', '.med-item')">All <span class="small-note">{{ rows|length }}</span></button>
+    {% for c, n in cats|dictsort %}<button class="btn btn-soft btn-sm" onclick="filterCards('{{ c|lower }}', '.med-item')"><i class="bi {{ icons.get(c, 'bi-capsule') }} me-1"></i>{{ c|title }} <span class="small-note">{{ n }}</span></button>{% endfor %}
+  </div>
+</div>
+<div class="row g-3 mb-3">
+  {% for m in rows %}
+  <div class="col-md-6 col-xl-4 med-item" data-search="{{ (m.name ~ ' ' ~ m.composition ~ ' ' ~ m.manufacturer ~ ' ' ~ m.category)|lower }}">
+    <div class="m-card">
+      <div class="d-flex align-items-start gap-3 mb-3">
+        <div class="kpi-icon {{ ['tint-green','tint-blue','tint-purple','tint-orange','tint-pink','tint-yellow'][loop.index0 % 6] }}"><i class="bi {{ icons.get(m.category, 'bi-capsule') }}"></i></div>
+        <div class="flex-grow-1"><div class="fw-bold">{{ m.name }}</div><div class="small-note">{{ m.manufacturer }}</div></div>
+        <div class="text-end"><div class="fw-bold">₹{{ m.mrp }}</div>
+          {% if m.needs_prescription %}<span class="role-badge role-REGULATOR">Rx</span>{% else %}<span class="role-badge role-PHARMACIST">OTC</span>{% endif %}</div>
+      </div>
+      <div class="small muted mb-3">{{ m.composition }} · {{ m.category|title }}</div>
+      <div class="row g-2">
+        <div class="col-3"><div class="stat-mini"><b>{{ m.batches }}</b><span>batches</span></div></div>
+        <div class="col-3"><div class="stat-mini"><b>{{ m.serials }}</b><span>serials</span></div></div>
+        <div class="col-3"><div class="stat-mini"><b>{{ m.sold }}</b><span>sold</span></div></div>
+        <div class="col-3"><div class="stat-mini"><b class="{% if m.copy_incidents %}text-danger{% endif %}">{{ m.copy_incidents }}</b><span>copies</span></div></div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h3><i class="bi bi-plus-circle me-1"></i>Add a medicine</h3><span class="tag">CHECK (mrp &gt; 0) · ENUM category</span></div>
+  <form method="post" class="row g-2 align-items-end">
+    {% if session.role == 'REGULATOR' %}
+    <div class="col-md-3"><label class="form-label">Manufacturer</label>
+      <select name="manufacturer_id" class="form-select">{% for mk in makers %}<option value="{{ mk.manufacturer_id }}">{{ mk.name }}</option>{% endfor %}</select></div>
+    {% endif %}
+    <div class="col-md-3"><label class="form-label">Name</label><input name="name" class="form-control" placeholder="Ibuprofen 400 mg" required></div>
+    <div class="col-md-3"><label class="form-label">Composition</label><input name="composition" class="form-control" placeholder="Ibuprofen IP 400 mg" required></div>
+    <div class="col-md-2"><label class="form-label">Category</label>
+      <select name="category" class="form-select">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div>
+    <div class="col-md-1"><label class="form-label">MRP ₹</label><input name="mrp" type="number" step="0.01" class="form-control" required></div>
+    <div class="col-md-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="needs_prescription" id="rx"><label class="form-check-label small" for="rx">Prescription</label></div></div>
+    <div class="col-md-2"><button class="btn btn-accent w-100">Add</button></div>
+  </form>
+  <div class="small-note mt-2">Try a price of 0 or less: the CHECK constraint rejects it.</div>
+</div>
+{% endblock %}
